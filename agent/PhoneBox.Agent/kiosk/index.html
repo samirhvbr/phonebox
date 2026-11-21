@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>PhoneBox</title>
+  <link rel="manifest" href="/kiosk/manifest.webmanifest">
+  <link rel="icon" href="/kiosk/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/kiosk/icon.png">
+  <link rel="stylesheet" href="/kiosk/pwa.css">
+  <script src="/kiosk/pwa.js" defer></script>
+</head>
+<body data-page="panel">
+  <header id="toolbar" class="toolbar">
+    <a class="brand" href="/kiosk/" aria-label="PhoneBox"><img src="/kiosk/icon.svg" alt="" width="30" height="30"><span>PhoneBox</span></a>
+    <p id="connection" role="status" data-text="connecting">Connecting…</p>
+    <button id="wakeLock" type="button" aria-pressed="false" data-text="keepAwake">Keep screen awake</button>
+    <button id="detailsToggle" type="button" aria-controls="connectionDetails" aria-expanded="false" data-text="connection">Connection</button>
+  </header>
+  <button id="showToolbar" type="button" class="toolbar-reveal" aria-label="Show panel controls" aria-controls="toolbar" hidden></button>
+  <aside id="connectionDetails" hidden>
+    <p id="sessionName"></p>
+    <p id="capabilities"></p>
+    <p data-text="installHelp">In Safari, choose Share → Add to Home Screen to open this panel as an app.</p>
+    <p data-text="toolbarHelp">Controls hide after five seconds. Tap the top of the panel to show them again.</p>
+    <p id="wakeNote" role="status"></p>
+    <button id="logout" type="button" data-text="unpair">Disconnect this browser</button>
+  </aside>
+  <p id="error" class="message" role="alert" hidden></p>
+  <main id="panelHost"><p id="waiting" class="waiting" data-text="connecting">Connecting…</p></main>
+  <noscript>Enable JavaScript in Safari to use the PhoneBox panel.</noscript>
+</body>
+</html>

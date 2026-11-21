@@ -1,10 +1,10 @@
 # Privacy policy
 
 PhoneBox has no accounts, no servers of its own, no telemetry, no analytics and no crash reporting. The project never
-receives any data from you. This page lists every place the agent (on your computer) and the Android app (on your
-phone) connect to, so you can see exactly what leaves your machine and turn it off.
+receives any data from you. This page lists every place the agent (on your computer), Android app, and this fork's
+optional browser panel connect to, so you can see exactly what leaves your machine and turn it off.
 
-Last updated: 2026-11-20 (PhoneBox 0.9.6).
+Last updated: 2026-11-21.
 
 ## What stays on your devices
 
@@ -96,6 +96,42 @@ Last updated: 2026-11-20 (PhoneBox 0.9.6).
 [`scripts/uninstall.ps1 -Purge`](scripts/uninstall.ps1) and [`scripts/uninstall.sh --purge`](scripts/uninstall.sh)
 remove the agent together with its settings, pushed data and log (without the switch, settings are kept). Uninstalling
 the Android app removes everything on the phone.
+
+## Safari / PWA in this fork
+
+The browser panel is off by default. Enabling **General → Safari / PWA** starts a separate local-network HTTPS
+listener, normally on port `8767`; administration stays on the Mac's loopback settings port. Pairing and local
+certificate generation add no external service or certificate-authority request. Enabled widgets retain the
+external connections listed below.
+
+The Mac creates `kiosk-ca.pfx` and `kiosk-server.pfx` in its PhoneBox data directory. These contain private keys
+and are restricted to the local user on macOS and Linux. The downloadable iPhone configuration profile contains
+only the public CA certificate. Installing and trusting it adds a system trust entry on the iPhone; remove that
+profile under **Settings → General → VPN & Device Management** when you stop using the panel.
+
+A five-minute, single-use invitation is exchanged for a separate 30-day browser cookie (`HttpOnly`, `Secure`,
+`SameSite=Strict`). The invitation is initially in a URL fragment, removed by the page, and submitted only to
+the Mac when pairing. `kiosk-devices.json` stores device names, permissions, creation/expiration times, and token
+hashes, never the raw cookie. Revoke a device in Mac settings or disconnect it from the browser panel.
+
+Browser mode keeps fetched layouts and live widget data in memory rather than the shared panel's persistent
+storage. The shared language preference (`pb-lang`) is still saved in local storage. API responses use
+`Cache-Control: no-store`; the service worker does not cache them or maintain an offline dashboard. The browser
+retains its pairing cookie and installed web app metadata until they expire or are removed. Browser sessions
+receive reduced AI session metadata and no conversation text, project paths,
+permission prompts, or session controls. Media, volume, and configured shortcuts require an explicit grant
+when pairing; settings changes, process termination, and command-output/custom HTML widgets are unavailable.
+
+The optional **Read accounts from ai-usagebar** integration starts the installed `ai-usagebar usage --json` CLI
+on the Mac about once a minute while a quota widget, clock status line, or quota automation rule is enabled.
+The report is cache-first, but the CLI may
+refresh its configured providers and manage its own sign-ins or credential files. PhoneBox does not read those
+credentials: it projects account IDs/display names, plan labels, measured quotas, reset times, balances, and
+freshness into the local panel. Provider errors use fixed messages; raw errors and session details are omitted.
+Turn off **General → AI quotas & CodexBar → Read accounts from ai-usagebar** to stop this integration. Provider
+destinations and authentication are determined by the CLI's configuration, not by the browser pairing flow.
+
+See [Safari / PWA setup](docs/SAFARI-PWA.md) for certificate verification, pairing, and removal.
 
 ## Connections made by default
 

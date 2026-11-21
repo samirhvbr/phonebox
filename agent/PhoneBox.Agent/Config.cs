@@ -17,6 +17,7 @@ public sealed class AgentConfig
     public NightConfig Night { get; set; } = new();
     public DisplayConfig Display { get; set; } = new();
     public LanConfig Lan { get; set; } = new();
+    public KioskConfig Kiosk { get; set; } = new();
     public UpdateConfig Updates { get; set; } = new();
     public ClaudeConfig Claude { get; set; } = new();
     /// <summary>Cursor agent-transcript sessions on the AI sessions widget (off by default).</summary>
@@ -67,7 +68,7 @@ public sealed class AgentConfig
     public object ToPublic(string? deviceId = null, Func<Shortcut, (long? Rev, bool Upload)>? shortcutIcon = null) => new
     {
         weather = Weather,
-        codexBar = CodexBar,
+        codexBar = new { CodexBar.Providers, CodexBar.Rotate, CodexBar.PageSize, CodexBar.RotateInterval, CodexBar.CodexLiveQuota, CodexBar.AiUsageBar },
         night = Night,
         display = Display,
         pages = PagesFor(deviceId).Select(p => new
@@ -231,6 +232,15 @@ public sealed class LanConfig
     public string? Token { get; set; }
     /// <summary>Separate key for the webhook API from other machines (push/notify/goto/refresh only). May appear in URLs.</summary>
     public string? WebhookToken { get; set; }
+}
+
+public sealed class KioskConfig
+{
+    /// <summary>HTTPS browser panel, with independent per-device pairing. Requires a restart.</summary>
+    public bool Enabled { get; set; }
+    public int Port { get; set; } = 8767;
+    /// <summary>Hostname used in the pairing URL and certificate; blank uses this computer's .local name.</summary>
+    public string? Host { get; set; }
 }
 
 public sealed class UpdateConfig
@@ -610,7 +620,9 @@ public sealed partial class ConfigStore(string path)
         c.Weather.Unit = WeatherUnitJsonConverter.Normalize(c.Weather.Unit);
         c.Weather.Model = WeatherModelJsonConverter.Normalize(c.Weather.Model);
         c.CodexBar ??= new();
-        c.CodexBar.Providers = (c.CodexBar.Providers ?? []).Where(p => p is "claude" or "codex" or "antigravity").Distinct().ToArray();
+        c.CodexBar.Providers = (c.CodexBar.Providers ?? []).Where(p =>
+            p is "claude" or "codex" or "antigravity" || c.CodexBar.AiUsageBar && p is { Length: > 0 and <= 120 }
+            && p.All(ch => char.IsAsciiLetterOrDigit(ch) || ch is '@' or '-' or '_' or '.')).Distinct().ToArray();
         c.CodexBar.PageSize = Math.Clamp(c.CodexBar.PageSize, 0, 6);
         c.CodexBar.RotateInterval = Math.Clamp(c.CodexBar.RotateInterval, 2, 300);
         c.Night ??= new();
@@ -648,6 +660,8 @@ public sealed partial class ConfigStore(string path)
         c.OpenCode.AlwaysCountdownSec = Math.Clamp(c.OpenCode.AlwaysCountdownSec, 0, 60);
         if (string.IsNullOrWhiteSpace(c.Updates.Repo)) c.Updates.Repo = "ersinkoc/phonebox";
         c.Lan.Port = Math.Clamp(c.Lan.Port, 1024, 65535);
+        c.Kiosk ??= new();
+        c.Kiosk.Port = Math.Clamp(c.Kiosk.Port, 1024, 65535);
         if (string.IsNullOrWhiteSpace(c.Lan.Token)) c.Lan.Token = NewToken();
         if (string.IsNullOrWhiteSpace(c.Lan.WebhookToken)) c.Lan.WebhookToken = NewToken();
         c.Night.Brightness = Math.Clamp(c.Night.Brightness, 0.01, 1);
@@ -996,6 +1010,9 @@ public sealed class CodexBarConfig
     public int RotateInterval { get; set; } = 8;
     /// <summary>Opt-in: poll live Codex quotas through the local Codex CLI app-server (off by default).</summary>
     public bool CodexLiveQuota { get; set; }
+    /// <summary>Opt-in: use the installed ai-usagebar CLI as the quota provider source.</summary>
+    public bool AiUsageBar { get; set; }
+    public string? AiUsageBarPath { get; set; }
 }
 
 /// <summary>

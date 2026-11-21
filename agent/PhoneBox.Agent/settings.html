@@ -823,6 +823,11 @@ nav a.on::before { color: var(--accent); }
           <label class="check"><input type="checkbox" data-bind="codexBar.codexLiveQuota"> <span data-i18n="s.quotas.codexLive">Read live Codex quotas with the Codex CLI</span></label>
           <span class="hint" data-i18n="s.quotas.codexLiveHint">Runs codex in the background every few minutes while a page shows Codex quotas (off by default). The Codex CLI manages its own sign-in and may refresh it.</span>
         </div>
+        <div class="field" style="margin-top:10px">
+          <label class="check"><input type="checkbox" data-bind="codexBar.aiUsageBar"> <span id="usagebarLabel" data-i18n="s.usagebar.enabled">Read accounts from ai-usagebar</span></label>
+          <span class="hint" id="usagebarHint" data-i18n="s.usagebar.hint">Uses the installed CLI's cache-first report, including named accounts. Provider credentials stay in ai-usagebar.</span>
+          <input type="text" data-bind="codexBar.aiUsageBarPath" placeholder="/Users/you/.cargo/bin/ai-usagebar" data-i18n-aria="s.usagebar.path" aria-label="ai-usagebar executable path">
+        </div>
         <div class="row" style="gap:12px;margin-top:10px">
           <div class="field" style="max-width:180px"><label data-i18n="s.quotas.pageSize">Cards at a time</label><input type="number" min="0" max="6" data-bind="codexBar.pageSize" data-type="int"><span class="hint" data-i18n="s.quotas.pageSizeHint">0 = show all</span></div>
           <div class="field" style="max-width:240px"><label data-i18n="s.quotas.rotateInterval">Rotate every (seconds)</label><input type="number" min="2" max="300" data-bind="codexBar.rotateInterval" data-type="int"><span class="hint" data-i18n="s.quotas.rotateIntervalHint">e.g. 5, 8, 15 seconds</span></div>
@@ -857,6 +862,23 @@ nav a.on::before { color: var(--accent); }
           <div class="field"><label data-i18n="s.wifi.addresses">Addresses offered to the phone</label><div id="lanHosts" class="hint">—</div></div>
         </div>
         <div class="row"><button class="btn primary" id="lanPair" data-i18n="s.wifi.pair">Pair a phone over Wi-Fi</button><button class="btn" id="lanRegen" data-i18n="s.wifi.newKey">New key (unpair phones)</button><span class="hint" id="lanStatus"></span></div>
+      </div>
+      <div class="card">
+        <h3 id="kioskTitle" data-i18n="s.browser.title">Safari / PWA</h3>
+        <label class="check"><input type="checkbox" data-bind="kiosk.enabled"> <span id="kioskEnableLabel" data-i18n="s.browser.enabled">Enable the HTTPS browser panel</span></label>
+        <div class="grid2" style="margin-top:12px">
+          <div class="field"><label id="kioskHostLabel" data-i18n="s.browser.host">Computer hostname or LAN address</label><input data-bind="kiosk.host" placeholder="your-mac.local" data-i18n-aria="s.browser.host" aria-label="Computer hostname or LAN address"></div>
+          <div class="field"><label id="kioskPortLabel" data-i18n="s.browser.port">HTTPS port</label><input type="number" data-bind="kiosk.port" data-type="int" min="1024" max="65535" data-i18n-aria="s.browser.port" aria-label="HTTPS port"></div>
+        </div>
+        <p class="hint" id="kioskStatus"></p>
+        <p class="hint" id="kioskTrustHint" data-i18n="s.browser.trustHint">Send the certificate profile to your iPhone using AirDrop. Install it in Settings, then enable SSL trust under General → About → Certificate Trust Settings. Compare the fingerprint below before trusting it. Remove the profile when you stop using PhoneBox.</p>
+        <p class="hint" id="kioskFingerprint" style="overflow-wrap:anywhere"></p>
+        <div class="row" style="gap:8px;flex-wrap:wrap">
+          <a class="btn" href="/api/kiosk/profile" download id="kioskProfile" data-i18n="s.browser.profile">Download certificate profile</a>
+          <label class="check"><input type="checkbox" id="kioskControls"> <span id="kioskControlsLabel" data-i18n="s.browser.controls">Allow media, volume and configured shortcuts</span></label>
+          <button class="btn primary" id="kioskPair" data-i18n="s.browser.pair">Pair an iPhone / browser</button>
+        </div>
+        <div id="kioskDevices" style="margin-top:12px"></div>
       </div>
       <div class="card">
         <h3 data-i18n="s.updates.title">Updates</h3>
@@ -3383,6 +3405,7 @@ function bindLanguage() {
     renderCameras();
     renderConsole();
     renderCharge();
+    loadKiosk();
     if (typeof queuePreview === 'function') queuePreview();
     changed();
   };
@@ -3430,7 +3453,8 @@ function bindCodexBar() {
     el.checked = provs.includes(id);
     el.onchange = () => {
       const cur = Array.isArray(cfg.codexBar.providers) ? cfg.codexBar.providers : [];
-      const next = ['claude', 'codex', 'antigravity'].filter((x) => x === id ? el.checked : cur.includes(x));
+      const next = cur.filter((x) => x !== id);
+      if (el.checked) next.push(id);
       if (!next.length) { el.checked = true; toast(t('s.js.keepOneAi'), true); return; }
       cfg.codexBar.providers = next;
       changed();
@@ -3470,6 +3494,47 @@ function renderLanStatus() {
     : lanInfo.active ? t('s.wifi.listening', { port: lanInfo.port }) : t('s.wifi.restartToListen');
 }
 
+async function loadKiosk() {
+  try {
+    const response = await fetch('/api/kiosk');
+    if (!response.ok) return;
+    const status = await response.json();
+    $('kioskStatus').textContent = status.active ? status.url
+      : t('s.browser.saveRestart');
+    $('kioskFingerprint').textContent = status.fingerprint ? 'SHA-256 · ' + status.fingerprint : '';
+    $('kioskPair').disabled = !status.active || status.restartNeeded;
+    $('kioskProfile').hidden = !status.active;
+    if (status.restartNeeded) $('restartBtn').hidden = false;
+    $('kioskDevices').replaceChildren(...status.devices.map((device) => h('div', { class: 'row', style: { gap: '8px', marginTop: '8px' } },
+      h('span', {}, device.name), h('span', { class: 'hint' }, new Date(device.expiresAt).toLocaleDateString()),
+      h('button', { class: 'btn sm', onclick: async () => {
+        const result = await fetch('/api/kiosk/devices/' + encodeURIComponent(device.id), { method: 'DELETE' });
+        if (result.ok) await loadKiosk(); else toast(t('s.browser.revokeFailed'), true);
+      } }, t('s.browser.revoke')))));
+  } catch (_) { $('kioskStatus').textContent = t('s.browser.unavailable'); }
+}
+
+$('kioskPair').onclick = async () => {
+  try {
+    const response = await fetch('/api/kiosk/pair/start?controls=' + $('kioskControls').checked, { method: 'POST' });
+    if (!response.ok) throw new Error(t('s.browser.restartFirst'));
+    const result = await response.json();
+    const image = URL.createObjectURL(new Blob([result.qr], { type: 'image/svg+xml' }));
+    $('modalBody').replaceChildren(
+      h('h3', {}, t('s.browser.pairTitle')),
+      h('p', {}, t('s.browser.pairHint')),
+      h('img', { src: image, alt: t('s.browser.qrAlt'), style: { width: '240px', maxWidth: '100%', display: 'block', margin: 'auto' } }),
+      h('code', { style: { overflowWrap: 'anywhere' } }, result.link),
+      h('p', { class: 'hint' }, t('s.browser.expiry', { time: new Date(result.expiresAt).toLocaleTimeString(window.PhoneBoxI18n.getLocale()) })));
+    $('modal').hidden = false;
+    onModalClose = () => {
+      URL.revokeObjectURL(image);
+      fetch('/api/kiosk/pair/cancel?attempt=' + result.attempt, { method: 'POST' }).catch(() => {});
+      loadKiosk();
+    };
+  } catch (error) { toast(error.message, true); }
+};
+
 async function loadInfo() {
   try {
     const i = await (await fetch('/api/info')).json();
@@ -3499,6 +3564,7 @@ async function loadInfo() {
     lanInfo = lan;
     renderLanStatus();
     $('restartBtn').hidden = !lan.restartNeeded;
+    await loadKiosk();
     renderUpdate(await (await fetch('/api/update')).json());
     renderWebhooks(lan);
     const [claudeHook, codexHook] = await Promise.all([

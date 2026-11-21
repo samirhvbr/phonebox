@@ -53,6 +53,9 @@ PhoneBox pairs a full-screen **Android app** with a small **desktop agent**. Bui
 visual editor: **126 widgets**, **30 templates**, multiple pages and a live preview. Connect several phones with
 their own layouts, or switch one phone between paired computers.
 
+**This fork also supports an iPhone browser panel:** see [Safari / PWA setup](docs/SAFARI-PWA.md) for local HTTPS,
+per-browser pairing, and Home Screen installation. This is a web app, not a native iOS release.
+
 ## What you can do
 
 | Use it for | What appears on the phone |

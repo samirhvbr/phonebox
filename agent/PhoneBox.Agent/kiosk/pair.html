@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <title>Pair PhoneBox</title>
+  <link rel="manifest" href="/kiosk/manifest.webmanifest">
+  <link rel="icon" href="/kiosk/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/kiosk/icon.png">
+  <link rel="stylesheet" href="/kiosk/pwa.css">
+  <script src="/kiosk/pwa.js" defer></script>
+</head>
+<body data-page="pair">
+  <main class="pair-card">
+    <img src="/kiosk/icon.svg" alt="" width="64" height="64">
+    <h1 data-text="pairTitle">Connect to PhoneBox</h1>
+    <p data-text="pairHelp">Open PhoneBox settings on your Mac and generate a browser pairing code.</p>
+    <form id="pairForm" action="/kiosk/pair" method="post">
+      <label for="pairCode" data-text="code">Pairing code</label>
+      <input id="pairCode" name="code" autocomplete="one-time-code" autocapitalize="none" spellcheck="false" maxlength="128" required>
+      <label for="deviceName" data-text="deviceName">Name for this browser</label>
+      <input id="deviceName" name="name" autocomplete="off" maxlength="80" required value="iPhone">
+      <p id="error" class="message" role="alert" hidden></p>
+      <button id="pairSubmit" class="primary" type="submit" data-text="connect">Connect</button>
+    </form>
+    <p class="hint" data-text="pairScope">The Mac decides which controls this browser may use. You can revoke its access from the Mac.</p>
+    <p class="hint" data-text="homePairHelp">If you add PhoneBox to your Home Screen, open it there and pair that app as well.</p>
+    <noscript>Enable JavaScript in Safari to pair this browser.</noscript>
+  </main>
+</body>
+</html>

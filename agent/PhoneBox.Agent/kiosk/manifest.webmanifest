@@ -1,0 +1,14 @@
+{
+  "id": "/kiosk/",
+  "name": "PhoneBox",
+  "short_name": "PhoneBox",
+  "start_url": "/kiosk/",
+  "scope": "/kiosk/",
+  "display": "standalone",
+  "background_color": "#0b101b",
+  "theme_color": "#111827",
+  "icons": [
+    { "src": "/kiosk/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/kiosk/icon.png", "sizes": "256x256", "type": "image/png", "purpose": "any" }
+  ]
+}

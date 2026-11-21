@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.10.0 — 2026-11-21
+
+Fork development snapshot based on upstream `086c915`. No native iOS application or packaged release is provided.
+
+- Add an opt-in Safari / PWA panel with dedicated local HTTPS, a public iPhone certificate profile, single-use
+  pairing invitations, and independently revocable browser sessions. Computer controls require a pairing grant.
+- Reuse the existing panel with a restricted browser API, reduced session metadata, and no persistent layout or
+  live-data cache. Keep desktop administration and native Android pairing separate.
+- Read named AI quota accounts from the installed ai-usagebar CLI, without importing provider credentials.
+- Reduce the browser toolbar height and hide it after five idle seconds; tapping the top edge restores it.
+  Keep connection details, keyboard interaction, and connection errors visible.
+- Redirect `/kiosk` to `/kiosk/` and give denied or missing resources an explicit content type.
+- Document setup, privacy boundaries, supported controls, and validation limits. Per-install preferences and
+  credentials remain in the local configuration and are not included in the repository.
+
 ## Unreleased
 
 **Agent**

@@ -1,4 +1,6 @@
 {
+  // Browser panel: independent HTTPS and per-device pairing, enabled from desktop settings.
+  "kiosk": { "enabled": false, "port": 8767, "host": null },
   // PhoneBox settings. Easiest to edit from the tray icon > Settings (http://127.0.0.1:8765).
   // Manual edits are picked up on the next request; no restart needed.
 

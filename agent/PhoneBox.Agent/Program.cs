@@ -37,6 +37,7 @@ var lanCert = lanCfg.Enabled && lanCfg.Port != Port ? Lan.Certificate(configDir)
 // USB uses the same certificate as Wi-Fi; the agent hands its fingerprint to the app over adb (see UsbLink.cs)
 var usbCert = lanCert ?? Lan.Certificate(configDir);
 var usb = new UsbLink(UsbLink.FreeLoopbackPort(), Lan.Fingerprint(usbCert));
+var kiosk = new KioskServer(configStore, configDir, Port, sp => State(sp, null));
 
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions
 {
@@ -53,6 +54,7 @@ builder.WebHost.ConfigureKestrel(k =>
     k.Listen(IPAddress.Loopback, usb.Port, l => l.UseHttps(usbCert));
     // Wi-Fi / Tailscale: HTTPS with a pinned self-signed certificate, token required (see Lan.cs).
     if (lanCert is not null) k.Listen(IPAddress.Any, lanCfg.Port, l => l.UseHttps(lanCert));
+    if (kiosk.Active) k.Listen(IPAddress.Any, kiosk.Port, l => l.UseHttps(kiosk.Certificates!.Server));
 });
 builder.Logging.ClearProviders();
 builder.Logging.AddFilter("Microsoft", LogLevel.Warning);
@@ -169,7 +171,8 @@ app.MapPost("/api/controls/radio-directory/check", async (HttpRequest req, Cance
 // path the phone uses; on the local port that is simply /api/... Routing runs after this, so it sees the new path.
 app.Use((ctx, next) =>
 {
-    if (ctx.Connection.LocalPort == Port && ctx.Request.Path.StartsWithSegments("/agent/api", out var rest))
+    if ((ctx.Connection.LocalPort == Port || kiosk.Active && ctx.Connection.LocalPort == kiosk.Port)
+        && ctx.Request.Path.StartsWithSegments("/agent/api", out var rest))
         ctx.Request.Path = "/api" + rest;
     return next(ctx);
 });
@@ -206,6 +209,13 @@ app.UseWebSockets();
 app.UseRouting();
 app.Use(async (ctx, next) =>
 {
+    if (kiosk.Active && ctx.Connection.LocalPort == kiosk.Port)
+    {
+        // Browser credentials and capabilities never enter the native phone presence/approval path.
+        if (await kiosk.HandleAsync(ctx)) return;
+        await next();
+        return;
+    }
     var origin = ctx.Request.Headers.Origin.ToString();
     if (ctx.Connection.LocalPort == usb.Port && ctx.Request.IsHttps)
     {
@@ -268,6 +278,14 @@ app.Use(async (ctx, next) =>
 });
 
 app.Map("/api/trackpad", TrackpadHandler.HandleEndpoint);
+
+// Browser administration is served only on the guarded loopback settings port.
+app.MapGet("/api/kiosk", () => Results.Json(kiosk.Status()));
+app.MapPost("/api/kiosk/pair/start", (bool? controls) => kiosk.StartPairing(controls == true));
+app.MapPost("/api/kiosk/pair/cancel", (long attempt) => { kiosk.Cancel(attempt); return Results.Ok(); });
+app.MapDelete("/api/kiosk/devices/{id}", (string id) => kiosk.Revoke(id) ? Results.Ok() : Results.NotFound());
+app.MapGet("/api/kiosk/profile", () => kiosk.Certificates is { } certificates
+    ? Results.File(certificates.Profile(), "application/x-apple-aspen-config", "PhoneBox-Mac.mobileconfig") : Results.NotFound());
 
 // ---------------------------------------------------------------- Wi-Fi pairing (local / USB only)
 // The phone calls this through the USB tunnel and stores everything it needs to connect over Wi-Fi.

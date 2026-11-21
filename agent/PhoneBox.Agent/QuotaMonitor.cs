@@ -167,8 +167,10 @@ public sealed partial class QuotaMonitor(ConfigStore config, ILogger<QuotaMonito
     private long _claudeNextAt;           // wall-clock ms of the next Claude request
     private int _claudeFailures;          // consecutive failed requests, for the back-off
     private long _nextCodexBar;
+    private long _nextAiUsageBar;
     private long _nextAntigravity;
     private volatile IReadOnlyList<QuotaProvider> _external = [];
+    private volatile IReadOnlyList<QuotaProvider> _aiUsageBar = [];
     private volatile QuotaOverview? _overview;
 
     /// <summary>Seeds quota state in unit tests without running background loops.</summary>
@@ -181,6 +183,23 @@ public sealed partial class QuotaMonitor(ConfigStore config, ILogger<QuotaMonito
     public IReadOnlyList<QuotaProvider> Snapshot()
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        if (IsAiUsageBarConfigured())
+        {
+            var providers = AiUsageBar.Snapshot(_aiUsageBar, now).ToList();
+            var requested = config.Get().Widgets(enabledPagesOnly: true)
+                .Where(UsesQuotaData)
+                .SelectMany(w => w.Opt("providers") is { ValueKind: JsonValueKind.Array } ids
+                    ? ids.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString()!) : [])
+                .Distinct(StringComparer.Ordinal);
+            foreach (var id in requested.Where(id => !providers.Any(p => p.Id == id)))
+            {
+                var name = CodexBar.DisplayName(id.Split('@')[0]);
+                providers.Add(new QuotaProvider(id, name, "", [], null, null,
+                    _aiUsageBar.Any(p => p.Id == "ai-usagebar") ? "ai-usagebar is unavailable"
+                        : "Configure " + name + " in ai-usagebar", Source: "ai-usagebar"));
+            }
+            return providers;
+        }
         var external = _external;
         var core = new[] { "claude", "codex", "antigravity" }
             .Select(id => id == "codex" ? CodexSnapshot(now, external.FirstOrDefault(p => p.Id == id))
@@ -216,7 +235,18 @@ public sealed partial class QuotaMonitor(ConfigStore config, ILogger<QuotaMonito
     internal QuotaOverview? Overview(long now) => CodexBar.SelectOverview(_overview, IsOverviewEnabled(), now);
 
     /// <summary>Returns true when live Codex CLI polling is opted in and an enabled page shows Codex quotas.</summary>
-    internal bool IsCodexLiveEnabled() => config is null || (config.Get() is { } c && c.CodexBar.CodexLiveQuota && c.ShowCodexQuota());
+    internal bool IsCodexLiveEnabled() => config is null || (!IsAiUsageBarConfigured()
+        && config.Get() is { } c && c.CodexBar.CodexLiveQuota && c.ShowCodexQuota());
+
+    internal bool IsAiUsageBarConfigured() => config?.Get().CodexBar.AiUsageBar == true;
+
+    /// <summary>Selected ai-usagebar quotas are refreshed for enabled widgets and automation rules.</summary>
+    internal bool IsAiUsageBarEnabled() => config?.Get() is { CodexBar.AiUsageBar: true } c
+        && (c.Widgets(enabledPagesOnly: true).Any(UsesQuotaData)
+            || c.Rules.Any(r => r.Enabled && r.When == "quota-above"));
+
+    private static bool UsesQuotaData(WidgetConfig widget) => widget.Type is "quotas" or "codexbar" or "quotaring"
+        || widget.Type == "clock" && widget.Bool("status") != false;
 
     internal const long CodexLiveIntervalMs = 180_000;
     internal const long CodexLiveStaleMs = 360_000;
@@ -359,6 +389,11 @@ public sealed partial class QuotaMonitor(ConfigStore config, ILogger<QuotaMonito
         LoadClaudeCache(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         while (!ct.IsCancellationRequested)
         {
+            if (await RefreshAiUsageBarIfSelectedAsync(ct))
+            {
+                await Wake.Delay(TimeSpan.FromSeconds(30), ct);
+                continue;
+            }
             if (Environment.TickCount64 >= _nextCodexBar)
             {
                 var path = ToolProcess.Find("codexbar");
@@ -394,6 +429,41 @@ public sealed partial class QuotaMonitor(ConfigStore config, ILogger<QuotaMonito
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
             catch (Exception ex) { log.LogWarning("claude quota: {Msg}", ex.Message); } // never end the loop for Codex and Antigravity
             await Wake.Delay(TimeSpan.FromSeconds(30), ct);
+        }
+    }
+
+    /// <summary>Returns true for the selected source even without consumers, so idle demand never enables native pollers.</summary>
+    internal async Task<bool> RefreshAiUsageBarIfSelectedAsync(CancellationToken ct,
+        Func<string, CancellationToken, Task<IReadOnlyList<QuotaProvider>>>? read = null)
+    {
+        if (!IsAiUsageBarConfigured()) return false;
+        if (IsAiUsageBarEnabled() && Environment.TickCount64 >= _nextAiUsageBar)
+        {
+            await RefreshAiUsageBarAsync(ct, read);
+            _nextAiUsageBar = Environment.TickCount64 + 60_000;
+        }
+        return true;
+    }
+
+    internal async Task RefreshAiUsageBarAsync(CancellationToken ct,
+        Func<string, CancellationToken, Task<IReadOnlyList<QuotaProvider>>>? read = null)
+    {
+        try
+        {
+            var path = AiUsageBar.Find(config.Get().CodexBar.AiUsageBarPath);
+            if (path is null) throw new FileNotFoundException();
+            _aiUsageBar = await (read ?? AiUsageBar.ReadAsync)(path, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException
+            or TimeoutException or System.ComponentModel.Win32Exception)
+        {
+            // Provider errors can contain account diagnostics; only expose a fixed integration message.
+            _aiUsageBar = _aiUsageBar.Count > 0
+                ? _aiUsageBar.Select(p => p with { Error = "ai-usagebar refresh failed" }).ToList()
+                : [new("ai-usagebar", "ai-usagebar", "", [], null, null,
+                    "ai-usagebar is unavailable; check its local settings and executable path", Source: "ai-usagebar")];
+            log.LogDebug("ai-usagebar refresh failed ({Kind})", e.GetType().Name);
         }
     }
 

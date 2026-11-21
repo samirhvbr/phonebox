@@ -22,6 +22,7 @@ import './widgets/spectrum.js';
 // (adb reverse) or Wi-Fi to the computer.
 
 export const API = '/agent/api';
+export const KIOSK = location.pathname.startsWith('/kiosk/panel/');
 // The phone's native proxy only forwards requests that carry this header (or image GETs), so script in a sandboxed
 // Custom HTML widget cannot reach the agent: adding the header to a cross-origin request needs a CORS preflight,
 // which the proxy refuses. See MainActivity.fromPanel.
@@ -80,9 +81,17 @@ export const DEFAULT_CFG = {
   shortcuts: [],
 };
 
+// Kiosk data lasts only for this page, so revoking a browser leaves no cached layout or widget data behind.
+const kioskStore = new Map();
 export const store = {
-  get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (_) { return d; } },
-  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} },
+  get(k, d) {
+    if (KIOSK) return kioskStore.has(k) ? kioskStore.get(k) : d;
+    try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (_) { return d; }
+  },
+  set(k, v) {
+    if (KIOSK) { kioskStore.set(k, v); return; }
+    try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {}
+  },
 };
 
 export let cfg = PREVIEW ? { ...DEFAULT_CFG, pages: [] } : { ...DEFAULT_CFG, ...store.get('cfg', {}) };
@@ -153,6 +162,9 @@ export async function api(path, method = 'GET', timeout = 2500) {
   try {
     const work = (async () => {
       const r = await fetch(API + path, { method, signal: ctl.signal, cache: 'no-store', headers: PANEL_HEADERS });
+      if (KIOSK && r.status === 401 && window.parent !== window) {
+        window.parent.postMessage({ type: 'phonebox-kiosk-session-expired' }, location.origin);
+      }
       if (!r.ok) throw Object.assign(new Error('HTTP ' + r.status), { status: r.status });
       const ct = r.headers.get('content-type') || '';
       // Awaited on purpose: the timer is cleared in finally, so returning the promise unawaited let a response that
@@ -2212,6 +2224,10 @@ export function applyDisplay() {
   const langChanged = I18n ? I18n.setLang(d.language || 'auto') : false;
   LOCALE = I18n ? I18n.getLocale() : 'en-GB';
   I18n?.applyDom();
+  if (KIOSK) {
+    const hint = document.querySelector('[data-i18n="panel.overviewHint"]');
+    if (hint) hint.textContent = LOCALE.startsWith('pt') ? 'deslize ou toque em uma página para navegar' : 'swipe or tap a page to switch';
+  }
   // theme and accent apply in the preview and the browser too
   document.body.dataset.theme = ['amoled', 'midnight', 'warm', 'graphite'].includes(d.theme) ? d.theme : 'default';
   const accent = hexToRgb(d.accent);
