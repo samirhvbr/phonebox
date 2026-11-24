@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.10.1 — 2026-11-24
+
+- ai-usagebar quotas: rows that ai-usagebar files beneath an overall meter are no longer drawn as quota rings of
+  their own. SuperGrok's per-product slices of its weekly limit (group `Breakdown`, for example "xAI API") and
+  Claude's recent sessions (group `Sessions`) are skipped; other grouped limits, such as Antigravity's model
+  families, are kept.
+
 ## 0.10.0 — 2026-11-21
 
 Fork development snapshot based on upstream `086c915`. No native iOS application or packaged release is provided.
