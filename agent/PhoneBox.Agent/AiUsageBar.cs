@@ -106,7 +106,7 @@ internal static class AiUsageBar
                 foreach (var metric in metrics.EnumerateArray().Take(32))
                 {
                     var label = Text(metric, "label", 120);
-                    if (label is null) continue;
+                    if (label is null || IsSubRow(metric)) continue;
                     if (Text(metric, "headline", 16) == "value")
                     {
                         if (Text(metric, "value", 120) is { } value) balances.Add(label + ": " + value);
@@ -133,6 +133,13 @@ internal static class AiUsageBar
         }
         return providers.DistinctBy(p => p.Id).ToList();
     }
+
+    /// <summary>
+    /// ai-usagebar files rows that sit beneath an overall meter under a group heading: SuperGrok's per-product
+    /// slices of its weekly limit ("Breakdown") and Claude's recent sessions ("Sessions"). They are not limits of
+    /// their own, so they never become quota rings. Other groups (Antigravity's model families) are real limits.
+    /// </summary>
+    private static bool IsSubRow(JsonElement metric) => Text(metric, "group", 64) is "Breakdown" or "Sessions";
 
     internal static IReadOnlyList<QuotaProvider> Snapshot(IReadOnlyList<QuotaProvider> providers, long now) =>
         providers.Select(p => p.Error is null && (p.UpdatedAt is null || now - p.UpdatedAt > StaleAfterMs

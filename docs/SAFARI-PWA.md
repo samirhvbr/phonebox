@@ -87,6 +87,9 @@ A page-specific idle timeout in the page editor overrides that global setting.
   and `minimax`. The adapter normalizes `anthropic` / `anthropic-desktop` to `claude` and `openai` to `codex`,
   retaining account suffixes. These are examples, not automatically created accounts. An unconfigured MiniMax
   entry shows a configuration placeholder, not a zero usage reading.
+- SuperGrok, read from the Grok CLI sign-in, uses the account ID `supergrok` and shows one ring for its weekly
+  limit. Its per-product rows, such as "xAI API", are slices of that weekly limit (report group `Breakdown`) and
+  are not drawn as separate rings.
 
 The agent runs `ai-usagebar usage --json` about once a minute while the integration and a quota consumer are
 enabled: a quota widget, a clock status line, or a quota automation rule. This is cache-first, not guaranteed

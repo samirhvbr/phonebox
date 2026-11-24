@@ -40,6 +40,24 @@ public sealed class AiUsageBarTests
     }
 
     [Fact]
+    public void GroupedSubRowsAreNotLimitsButOtherGroupsAre()
+    {
+        var providers = AiUsageBar.Parse("""
+            {"schema_version":1,"entries":[
+              {"id":"supergrok","fetched_at":"2026-11-21T18:00:00Z","metrics":[
+                {"label":"Weekly usage","percent":8,"window_secs":604800},
+                {"label":"xAI API","percent":8,"group":"Breakdown"}]},
+              {"id":"anthropic@me","fetched_at":"2026-11-21T18:00:00Z","metrics":[
+                {"label":"Weekly (7d)","percent":2},{"label":"phonebox","percent":40,"group":"Sessions"}]},
+              {"id":"antigravity","fetched_at":"2026-11-21T18:00:00Z","metrics":[
+                {"label":"Gemini Pro","percent":30,"group":"Gemini"}]}]}
+            """, Now);
+        Assert.Equal("Weekly usage", Assert.Single(providers[0].Limits).Label);
+        Assert.Equal("Weekly (7d)", Assert.Single(providers[1].Limits).Label);
+        Assert.Equal("Gemini Pro", Assert.Single(providers[2].Limits).Label);
+    }
+
+    [Fact]
     public void DropsInvalidMetricsAndKeepsOtherProviders()
     {
         var providers = AiUsageBar.Parse("""
